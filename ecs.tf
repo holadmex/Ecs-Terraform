@@ -1,6 +1,6 @@
 # Create ECS Cluster
 resource "aws_ecs_cluster" "cluster" {
-  name = "Full-stack-web-app"
+  name = "web-app"
 }
 
 # Create CloudWatch Log Group for ECS
@@ -11,17 +11,26 @@ resource "aws_cloudwatch_log_group" "ecs_log_group" {
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "task" {
-  family = "web-app-task"
+  family = "web-task"
   container_definitions = jsonencode([
     {
       name      = "frontend"
-      image     = 
+      image     = "nginx:latest"
       cpu       = 1024
       memory    = 3072
       essential = true
+      
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+
       environment = [
         /*{ name = "ENV_VAR_1", value = "value1" },
-        { name = "ENV_VAR_2", value = "value2" }*/
+        { name = "ENV_VAR_2", value = "value2" } */
       ]
       logConfiguration = {
         logDriver = "awslogs"
@@ -36,12 +45,11 @@ resource "aws_ecs_task_definition" "task" {
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = "1024"
+  memory                   = "3072"
 }
 
 
-# ECS Service
 # Security group for the load balancer
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
@@ -125,22 +133,22 @@ resource "aws_lb_listener" "http_listener" {
 
 # ECS Service with Load Balancer Configuration
 resource "aws_ecs_service" "service" {
-  name            = "web-app-service"
+  name            = "web-service"
   cluster         = aws_ecs_cluster.cluster.arn
   task_definition = aws_ecs_task_definition.task.arn
-  desired_count   = 1
+  desired_count   = 0
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = ["subnet-3a4cc635", "subnet-ba203d85"] # Replace with your Subnet IDs
-    security_groups = [aws_security_group.ecs_service_sg.id]
+    subnets          = ["subnet-3a4cc635", "subnet-ba203d85"] # Replace with your Subnet IDs
+    security_groups  = [aws_security_group.ecs_service_sg.id]
     assign_public_ip = true
   }
 
   load_balancer {
     target_group_arn = aws_lb_target_group.tg.arn
-    container_name   = "web-app-container" # Replace with your container name
-    container_port   = 80 # Replace with the port your app listens on
+    container_name   = "frontend" # Replace with your container name
+    container_port   = 80         # Replace with the port your app listens on
   }
 
   depends_on = [
